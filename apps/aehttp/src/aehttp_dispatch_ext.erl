@@ -95,14 +95,17 @@ handle_request('GetTxs', _Req, _Context) ->
 
 handle_request('PostBlock', Req, _Context) ->
     SerializedBlock = add_missing_to_genesis_block(maps:get('Block', Req)),
-    {ok, Block} = aec_blocks:deserialize_from_map(SerializedBlock),
-
-    %% Only for logging
-    Header = aec_blocks:to_header(Block),
-    {ok, HH} = aec_headers:hash_header(Header),
-    lager:debug("'PostBlock'; header hash: ~p", [HH]),
-    ok = aec_miner:post_block(Block),
-    {200, [], #{}};
+    case aec_blocks:deserialize_from_map(SerializedBlock) of
+        {ok, Block} ->
+            %% Only for logging
+            Header = aec_blocks:to_header(Block),
+            {ok, HH} = aec_headers:hash_header(Header),
+            lager:debug("'PostBlock'; header hash: ~p", [HH]),
+            ok = aec_miner:post_block(Block),
+            {200, [], #{}};
+        {error, bad_nonce} ->
+            {400, [], #{reason => <<"Illegal nonce">>}}
+    end;
 
 handle_request('PostTx', #{'Tx' := Tx} = Req, _Context) ->
     lager:debug("Got PostTx; Req = ~p", [Req]),

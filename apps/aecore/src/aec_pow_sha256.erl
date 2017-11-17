@@ -28,7 +28,7 @@
 %% calculation of 'Data', results in a smaller value than the target.
 %%------------------------------------------------------------------------------
 -spec generate(Data :: aec_sha256:hashable(), Target :: aec_pow:sci_int(),
-               Nonce :: integer()) -> aec_pow:pow_result().
+               Nonce :: aec_pow:nonce()) -> aec_pow:pow_result().
 generate(Data, Target, Nonce) when Nonce >= 0,
                                    Nonce =< ?MAX_NONCE ->
     Hash1 = aec_sha256:hash(Data),
@@ -44,7 +44,7 @@ generate(Data, Target, Nonce) when Nonce >= 0,
 %%------------------------------------------------------------------------------
 %% Proof of Work verification (with target check)
 %%------------------------------------------------------------------------------
--spec verify(Data :: aec_sha256:hashable(), Nonce :: integer(),
+-spec verify(Data :: aec_sha256:hashable(), Nonce :: aec_pow:nonce(),
              Evd :: aec_pow:pow_evidence(), Target :: aec_pow:sci_int()) ->
                     boolean().
 verify(Data, Nonce, Evd, Target) when Evd == no_value,

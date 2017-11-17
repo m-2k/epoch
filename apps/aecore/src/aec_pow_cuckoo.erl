@@ -69,7 +69,7 @@
 %%  Very slow below 3 threads, not improving significantly above 5, let us take 5.
 %%------------------------------------------------------------------------------
 -spec generate(Data :: aec_sha256:hashable(), Target :: aec_pow:sci_int(),
-               Nonce :: integer()) -> aec_pow:pow_result().
+               Nonce :: aec_pow:nonce()) -> aec_pow:pow_result().
 generate(Data, Target, Nonce) when Nonce >= 0,
                                    Nonce =< ?MAX_NONCE ->
     %% Hash Data and convert the resulting binary to a base64 string for Cuckoo
@@ -79,7 +79,7 @@ generate(Data, Target, Nonce) when Nonce >= 0,
 %%------------------------------------------------------------------------------
 %% Proof of Work verification (with difficulty check)
 %%------------------------------------------------------------------------------
--spec verify(Data :: aec_sha256:hashable(), Nonce :: integer(),
+-spec verify(Data :: aec_sha256:hashable(), Nonce :: aec_pow:nonce(),
              Evd :: aec_pow:pow_evidence(), Target :: aec_pow:sci_int()) ->
                     boolean().
 verify(Data, Nonce, Evd, Target) when is_list(Evd),
@@ -100,8 +100,9 @@ verify(Data, Nonce, Evd, Target) when is_list(Evd),
 %%------------------------------------------------------------------------------
 %% Proof of Work generation: use the hash provided
 %%------------------------------------------------------------------------------
--spec generate_int(Hash :: binary(), Nonce :: integer(), Target :: aec_pow:sci_int()) ->
-                          {'ok', Nonce2 :: integer(), Solution :: pow_cuckoo_solution()} |
+-spec generate_int(Hash :: binary(), Nonce :: aec_pow:nonce(), Target :: aec_pow:sci_int()) ->
+                          {'ok', Nonce2 :: aec_pow:nonce(),
+                           Solution :: pow_cuckoo_solution()} |
                           {'error', term()}.
 generate_int(Hash, Nonce, Target) ->
     Header = pack_header_and_nonce(Hash, Nonce),
@@ -159,7 +160,7 @@ generate_int(Header, Target) ->
 %%   of the PoW (e.g. verifier terminates abnormally).
 %% @end
 %%------------------------------------------------------------------------------
--spec verify(Hash :: binary(), Nonce :: integer(),
+-spec verify(Hash :: binary(), Nonce :: aec_pow:nonce(),
              Soln :: aec_pow:pow_evidence()) -> boolean().
 verify(Hash, Nonce, Soln) ->
     BinDir = aecuckoo:bin_dir(),
@@ -199,30 +200,34 @@ verify(Hash, Nonce, Soln) ->
 %%   hash and a uint64 nonce.
 %% @end
 %%------------------------------------------------------------------------------
--spec pack_header_and_nonce(binary(), integer()) -> string().
+-spec pack_header_and_nonce(binary(), aec_pow:nonce()) -> string().
 pack_header_and_nonce(Hash, Nonce) ->
     %% Cuckoo originally uses 32-bit nonces inserted at the end of its 80-byte buffer.
     %% This buffer is hashed into the keys used by the main algorithm.
     %%
-    %% We insert our base64-encoded 64-bit Nonce before that (i.e., from byte 65)
-    %% and pass 0 as nonce  for cuckoo. (We use the -x option to write the full buffer.)
-    %% The SHA256 hash is 32 bytes, 44 bytes base64-encoded. There is still room for
-    %% zero characters between header and nonce.
+    %% We intend to insert our 64-bit Nonce before the location Cuckoo writes its
+    %% 32-bit nonce into. We cannot do it directly because Cuckoo supports that
+    %% (with option -x) for the mean miner only. Therefore, we base64-encode both the
+    %% hash of the block header and the nonce and pass the resulting command-line
+    %% friendly string with the -h option to Cuckoo.
+    %%
+    %% The SHA256 hash is 32 bytes (44 chars base64-encoded), the nonce is 8 bytes
+    %% (12 chars base64-encoded). There is still room for zero characters between hash
+    %% and the nonce (cannot use zero bytes that Cuckoo normally uses for padding).
     %%
     %% (Base64 encoding: see RFC 3548, Section 3:
     %% https://tools.ietf.org/html/rfc3548#page-4
     %% converts every triplet of bytes to 4 characters: from N bytes to 4*ceil(N/3)
     %% bytes.)
+    %%
+    %% Like Cuckoo, (and unlike we hash the header) we use little-endian here.
     NonceStr = base64:encode_to_string(<<Nonce:64/little-unsigned-integer>>),
-    NonceStart = ?CUCKOO_BUFSIZE - length(NonceStr) - 4,
     HashStr = base64:encode_to_string(Hash),
-    case length(HashStr) of
-        Len when Len < NonceStart ->
-            ZLen = NonceStart - Len,  %% padding between header and nonce
-            HashStr ++ lists:duplicate(ZLen, $0) ++ NonceStr;
-        _ ->
-            string:substr(HashStr, 1, NonceStart) ++ NonceStr
-    end.
+    12 = length(NonceStr),
+    44 = length(HashStr),
+    %% Fill in space between the hash and the nonce so that is spans the
+    %% 76-bytes before the 4 bytes Cuckoo overwrites. 76 - 44 - 12 = 20.
+    HashStr ++ lists:duplicate(20, $0) ++ NonceStr.
 
 %%------------------------------------------------------------------------------
 %% @doc

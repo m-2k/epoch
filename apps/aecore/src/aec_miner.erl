@@ -43,8 +43,8 @@
 -define(FETCH_NEW_TXS_FROM_POOL, true).
 
 -record(state, {block_candidate :: block() | undefined,
-                initial_cycle_nonce = 0 :: integer(),
-                max_block_candidate_nonce = 0 :: integer(),
+                initial_cycle_nonce = 0 :: aec_pow:nonce(),
+                max_block_candidate_nonce = 0 :: aec_pow:nonce(),
                 fetch_new_txs_from_pool = ?FETCH_NEW_TXS_FROM_POOL:: boolean(),
                 miner = none :: pid() | none,
                 autostart = true :: boolean()
