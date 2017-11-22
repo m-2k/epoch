@@ -158,6 +158,7 @@ serialize_to_binary(H) ->
     {ok, Map} = serialize_to_map(H),
     {ok, jsx:encode(Map)}.
 
+-spec serialize_for_hash(header()) -> deterministic_header_binary().
 serialize_for_hash(H) ->
     PowEvidence = serialize_pow_evidence_for_hash(H#header.pow_evidence),
     %% Todo check size of hashes = (?BLOCK_HEADER_HASH_BYTES*8),
